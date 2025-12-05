@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Electric Bill Calculator - Profile</title>
+  <link rel="stylesheet" href="/css/Profile.css" />
+</head>
+<body>
+  <div class="profile-container">
+    <div class="top-buttons">
+      <button class="back-btn" onclick="window.location.href='HomePage.html'">⬅ Back To Dashboard</button>
+      <button class="quit-btn" onclick="handleLogout()">⏻ Quit</button>
+    </div>
+
+    <div class="profile-header">
+      <h1>Profile</h1>
+    </div>
+
+    <div class="container">
+      <div class="profile-card">
+
+            <div class="profile-info-box">
+            <div class="profile-main">
+              <div class="profile-pic-container">
+                <img id="profile-pic" src="#" alt="Profile Picture" />
+              </div>
+
+              <div class="profile-details">
+                <h2>Name: <span id="name">Loading...</span></h2>
+                <p>Email: <span id="email">Loading...</span></p>
+                <p>Address: <span id="address">Loading...</span></p>
+                <p>Phone Number: <span id="phoneNumber">Loading...</span></p>
+              </div>
+            </div>
+        </div>
+
+              <div class="Upload">
+              <input type="file" id="upload-pic" accept="image/*" />
+              <button onclick="uploadProfilePic()">Upload Picture</button>
+            </div>
+        <hr />
+
+        <!-- Metrics Grid -->
+        <div class="metrics-grid">
+          <div class="metric-box">
+            <h3>Total Consumption</h3>
+            <p><span id="consumption">--</span> kWh</p>
+          </div>
+          <div class="metric-box">
+            <h3>Total Cost</h3>
+            <p>₱<span id="cost">--</span></p>
+          </div>
+          <div class="metric-box">
+            <h3>Average Total Cost</h3>
+            <p>₱<span id="average">--</span></p>
+          </div>
+          <div class="metric-box">
+            <h3>Date Payed</h3>
+            <p><span id="datepayed">--</span></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Supabase SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/js/supabase-config.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      const { data: { session }, error } = await supabaseClient.auth.getSession();
+      if (!session) {
+        window.location.href = 'Login.html';
+        return;
+      }
+
+      const user = session.user;
+      const metadata = user.user_metadata || {};
+
+      document.getElementById('name').textContent = metadata.full_name || 'N/A';
+      document.getElementById('email').textContent = user.email || 'N/A';
+      document.getElementById('address').textContent = metadata.address || 'N/A';
+      document.getElementById('phoneNumber').textContent = metadata.phoneNumber || 'N/A';
+      document.getElementById('profile-pic').src = metadata.profile_pic || '/images/default-avatar.png';
+
+      const { data: profile, error: profileError } = await supabaseClient
+        .from('profiles')
+        .select('total_consumption, total_cost, average_cost, datepayed')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError) {
+        console.error('Error loading profile:', profileError.message);
+        return;
+      }
+
+      document.getElementById('consumption').textContent = profile.total_consumption || '0';
+      document.getElementById('cost').textContent = profile.total_cost || '0.00';
+      document.getElementById('average').textContent = profile.average_cost || '0.00';
+      document.getElementById('datepayed').textContent = profile.datepayed || '--';
+    });
+
+    async function uploadProfilePic() {
+      const fileInput = document.getElementById('upload-pic');
+      const file = fileInput.files[0];
+      if (!file) {
+        alert("Please select a file first!");
+        return;
+      }
+
+      const allowedTypes = ['image/jpeg', 'image/png'];
+      if (!allowedTypes.includes(file.type)) {
+        alert("Only .jpg and .png images are allowed.");
+        return;
+      }
+
+      const maxSize = 2 * 1024 * 1024;
+      if (file.size > maxSize) {
+        alert("Image must be smaller than 2MB.");
+        return;
+      }
+
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      const user = session.user;
+      const filePath = `public/${user.id}/${file.name}`;
+
+      const { data, error } = await supabaseClient.storage
+        .from('avatar')
+        .upload(filePath, file, { upsert: true });
+
+      if (error) {
+        alert("Upload failed: " + error.message);
+        return;
+      }
+
+      const { data: urlData } = supabaseClient.storage
+        .from('avatar')
+        .getPublicUrl(filePath);
+
+      const imageUrl = urlData.publicUrl;
+
+      const { error: updateError } = await supabaseClient.auth.updateUser({
+        data: { profile_pic: imageUrl }
+      });
+
+      if (updateError) {
+        alert("Failed to save profile picture: " + updateError.message);
+        return;
+      }
+
+      document.getElementById('profile-pic').src = imageUrl;
+      alert("Profile picture updated!");
+    }
+
+    async function handleLogout() {
+      const { error } = await supabaseClient.auth.signOut();
+      if (!error) {
+        window.location.href = 'Login.html';
+      } else {
+        alert('Error logging out. Please try again.');
+      }
+    }
+  </script>
+</body>
+</html>

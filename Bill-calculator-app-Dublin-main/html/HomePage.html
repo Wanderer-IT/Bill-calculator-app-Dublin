@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Electric Bill Dashboard</title>
+  <link rel="stylesheet" href="/css/homepage.css">
+</head>
+<body>
+
+<div class="dashboard-container">
+
+  <aside class="sidebar">
+    <div class="logo">
+      <h2>⚡ Electric Bill<br>Calculator</h2>
+    </div>
+
+    <nav class="menu">
+      <button onclick="window.location.href='Profile.html'">👤 Profile</button>
+      <button onclick="window.location.href='HomePage.html'">📊 Dashboard</button>
+      <button onclick="window.location.href='Records.html'">📁 Records</button>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <header class="top-bar">
+      <h1>Electric Bill Dashboard</h1>
+    </header>
+
+    <section class="overview">
+      <div class="card"><p>Month</p><h2></h2></div>
+      <div class="card"><p>Power_Consumption</p><h2></h2></div>
+      <div class="card"><p>Cost_Per_kwh</p><h2></h2></div>
+      <div class="card"><p>Result</p><h2></h2></div>
+    </section>
+
+        <div class="container">
+
+            <form onsubmit="event.preventDefault();">
+                <label for="month">Month:</label>
+                <input
+                    id="month"
+                    type="text"
+                    placeholder="e.g., January 2024"
+                    required
+                /><br />
+
+                <label for="power_consumption">Power Consumption (kWh):</label>
+                <input
+                    id="power_consumption"
+                    type="number"
+                    step="0.01"
+                    placeholder="Enter power consumption"
+                    required
+                /><br />
+
+                <label for="cost_per_kwh">Cost per kilowatt-hour (₱):</label>
+                <input
+                    id="cost_per_kwh"
+                    type="number"
+                    step="0.01"
+                    placeholder="Enter cost per kWh"
+                    required
+                />
+
+                <br />
+                <button id="btn_calculate" type="button">Calculate</button>
+            </form>
+
+            <div id="result"></div>
+        </div>
+
+        <!-- Supabase CDN -->
+        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+        <script src="/js/supabase-config.js"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", async () => {
+    await initAuth();
+  });
+
+  const btn_calculate = document.getElementById("btn_calculate");
+
+  btn_calculate.addEventListener("click", async function () {
+    let month = document.getElementById("month");
+    let power_consumption = document.getElementById("power_consumption");
+    let cost_per_kwh = document.getElementById("cost_per_kwh");
+    let result = document.getElementById("result");
+
+    if (!month.value || !power_consumption.value || !cost_per_kwh.value) {
+      alert("Please fill in all fields!");
+      return;
+    }
+
+    const user = await getCurrentUser();
+    if (!user) {
+      alert("You must be logged in to save calculations!");
+      window.location.href = "Login.html";
+      return;
+    }
+
+    let result_value = parseFloat(cost_per_kwh.value) * parseFloat(power_consumption.value);
+
+    result.innerHTML = `Your electric bill is: ₱ ${result_value.toFixed(2)}`;
+
+    // Update overview cards
+    document.querySelector(".overview .card:nth-child(1) h2").textContent = month.value;
+    document.querySelector(".overview .card:nth-child(2) h2").textContent = parseFloat(power_consumption.value).toFixed(2) + " kWh";
+    document.querySelector(".overview .card:nth-child(3) h2").textContent = "₱ " + parseFloat(cost_per_kwh.value).toFixed(2);
+    document.querySelector(".overview .card:nth-child(4) h2").textContent = "₱ " + result_value.toFixed(2);
+
+    // Save to Supabase
+    try {
+      const { data, error } = await supabaseClient
+        .from("calculations")
+        .insert([
+          {
+            user_id: user.id,
+            month: month.value,
+            power_consumption: parseFloat(power_consumption.value),
+            cost_per_kwh: parseFloat(cost_per_kwh.value),
+            result: result_value,
+          },
+        ])
+        .select();
+
+      if (error) {
+        console.error("Error saving calculation:", error);
+        alert("Calculation saved locally, but failed to save to database: " + error.message);
+      } else {
+        console.log("Calculation saved:", data);
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      alert("Error saving calculation: " + error.message);
+    }
+
+    // Get or create the results table
+    let table = document.getElementById("myTable");
+    if (!table) {
+      result.innerHTML += `
+        <h3>Calculation History</h3>
+        <table id="myTable" border="1">
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th>Power Consumption (kWh)</th>
+              <th>Cost Per kWh (₱)</th>
+              <th>Result (₱)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      `;
+      table = document.getElementById("myTable");
+    }
+
+    // Insert new row at the top
+    var row = table.insertRow(1);
+    row.insertCell(0).innerHTML = month.value;
+    row.insertCell(1).innerHTML = parseFloat(power_consumption.value).toFixed(2);
+    row.insertCell(2).innerHTML = "₱ " + parseFloat(cost_per_kwh.value).toFixed(2);
+    row.insertCell(3).innerHTML = "₱ " + result_value.toFixed(2);
+
+    // Clear form inputs
+    month.value = "";
+    power_consumption.value = "";
+    cost_per_kwh.value = "";
+  });
+
+  async function handleLogout() {
+    const success = await signOut();
+    if (success) {
+      window.location.href = "login.html";
+    } else {
+      alert("Error logging out. Please try again.");
+    }
+  }
+</script>
+
+    </body>
+</html>
